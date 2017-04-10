@@ -1,0 +1,210 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>reveal.js</title>
+
+		<link rel="stylesheet" href="css/reveal.css">
+		<link rel="stylesheet" href="css/theme/black.css">
+
+		<!-- Theme used for syntax highlighting of code -->
+		<link rel="stylesheet" href="lib/css/zenburn.css">
+
+		<!-- Printing and PDF exports -->
+		<script>
+			var link = document.createElement( 'link' );
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+			document.getElementsByTagName( 'head' )[0].appendChild( link );
+		</script>
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+			   <section id="halvm" class="slide level3">
+<h1><a href="http://github.com/GaloisInc/HaLVM">HaLVM</a></h1>
+<!-- Talking points are comments ;) so as not to confuse the pandocs -->
+<p>The Haskell Lightweight Virtual Machine</p>
+<p>A <a href="http://galois.com">Galois</a> Project</p>
+<p>by</p>
+<p><a href="https://github.com/acw">Adam Wick</a>, <a href="https://github.com/elliottt">Trevor Elliott</a> <!-- Build a trust-worthy operating system based on a microkernel design
+     Inspired by work done on House (Haskell operating system)
+     Adam gave first presentation in 2006
+     Now open-sourced and an experimental platform for OS library design
+--></p>
+</section>
+<section id="hypervisor" class="slide level3">
+<h1>Hypervisor</h1>
+<ul>
+<li>Virtualization</li>
+<li>Manage and share machine resources intelligently across multiple, potentially different hosts.</li>
+<li>Implementations
+<ul>
+<li>bhyve, Hypervisor.Framework, KVM, Xen</li>
+<li>HaLVM 2.x specifically targets Xen <em>only</em></li>
+<li>Xen heavily used by AWS</li>
+</ul></li>
+</ul>
+</section>
+<section id="components" class="slide level3">
+<h1>Components</h1>
+<ul>
+<li>halvm-ghc/rts/xen (entry-exit.c, timers, clocks, interrupts, memory management)
+<ul>
+<li>Manages interaction between Haskell application and Xen layer</li>
+</ul></li>
+<li>bootloader, openlibm, minlibc, ldkernel, Makefile</li>
+<li>shell scripts (halvm-ghc, halvm-ghc-pkg, halvm-cabal)</li>
+<li>No unix (network, directory)</li>
+<li>HaLVMCore, XenDevice <!-- Main benefits are reduced attack surface
+rts/xen acts a miniature OS
+Domains communicate back to Xen specific portion of Linux kernel via hypercalls
+ldkernel is a linker script that plays an important role in assembling the microkernel
+Nix essentially wraps the Makefile, and make recursively calls into halvm-ghc (ghc fork) to build
+HaLVMCore (Haskell bindings to Xen facilities)
+XenDevice (Haskell bindings to Disk, NIC, PCI) - Xen virtual devices
+There are no POSIX facilities, no users, no pthreads or sockets.
+--></li>
+</ul>
+</section>
+<section id="getting-halvm" class="slide level3">
+<h1>Getting HaLVM</h1>
+<p>Updated for GHC 8.0.2</p>
+<pre><code>λ nix-shell -p haskell.compiler.ghcHaLVM240
+λ nix-shell -p haskell.compiler.integer-simple.ghcHaLVM240</code></pre>
+<p>Available from cache.nixos.org</p>
+<!-- HaLVM build / distribution / package maintenance is a pain point, GHC takes a long time to compile.
+HaLVM on the Nix cache essentially solves this.
+Still a tad difficult to develop with since the entire GHC tree is a single derivation.
+At least builds run in an isolated manner w/ nix.
+-->
+</section>
+<section id="hello-world" class="slide level3">
+<h1>Hello World</h1>
+<pre><code>λ nixos ~ → cat &gt; Main.hs &lt;&lt;EOF
+heredoc&gt; module Main where
+heredoc&gt;
+heredoc&gt; import Hypervisor.Console
+heredoc&gt; import Control.Concurrent
+heredoc&gt; import Control.Monad
+heredoc&gt;
+heredoc&gt; main :: IO ()
+heredoc&gt; main = do
+heredoc&gt;   () &lt;$ initXenConsole
+heredoc&gt;   forever $ do
+heredoc&gt;     threadDelay (1000 * 1000)
+heredoc&gt;     putStrLn &quot;Hello world!&quot;
+heredoc&gt; EOF</code></pre>
+<!--
+Keep it running so the virtual machine doesn't exit
+Xen Console allows one to see print statements from a guest
+-->
+</section>
+<section id="building" class="slide level3">
+<h1>Building</h1>
+<pre><code>[nix-shell:~]$ halvm-ghc Main.hs -o main</code></pre>
+<!-- Can use common cabal2nix infrastructure here too. -->
+<!-- ELF file that runs as a paravirtualized guest -->
+</section>
+<section id="xen-config" class="slide level3">
+<h1>Xen config</h1>
+<pre><code>[nix-shell:~]$ cat &gt; main.config &lt;&lt;EOF
+&gt; name = &quot;main&quot;
+&gt; kernel = &quot;main&quot;
+&gt; memory = 16
+&gt; EOF</code></pre>
+</section>
+<section id="running" class="slide level3">
+<h1>Running</h1>
+<pre><code>[nix-shell:~]$ sudo xl create main.config -c</code></pre>
+</section>
+<section id="result" class="slide level3">
+<h1>Result</h1>
+<pre><code>[nix-shell:~]$ sudo xl create main.config -c
+Parsing config from main.config
+Hello world!
+Hello world!
+Hello world!
+C-[</code></pre>
+</section>
+<section id="status" class="slide level3">
+<h1>Status</h1>
+<pre><code>[nix-shell:~/halvm-beginning]$ sudo xl list
+Name       ID   Mem VCPUs   State   Time(s)
+main       28    64   1    -b----    0.1</code></pre>
+</section>
+<section id="cleaning-up" class="slide level3">
+<h1>Cleaning up</h1>
+<pre><code>[nix-shell:~]$ sudo xl destroy main</code></pre>
+</section>
+<section id="ldkernel" class="slide level3">
+<h1>ldkernel</h1>
+<p>Where it all comes together</p>
+<pre><code>ghc -pgml ldkernel</code></pre>
+</section>
+<section id="hans" class="slide level3">
+<h1>HaNS</h1>
+<ul>
+<li><a href="https://github.com/GaloisInc/HaNS">HaNS - https://github.com/GaloisInc/HaNS</a></li>
+<li>RFC-compliant Haskell Network Stack</li>
+<li>From Layer 2 (Ethernet) to Layer 7 (Application)
+<ul>
+<li>TCP/IP, UDP, DHCP, DNS, etc.</li>
+</ul></li>
+</ul>
+</section>
+<section id="halvm-web-server-example" class="slide level3">
+<h1>HaLVM web server example</h1>
+<ul>
+<li><a href="https://github.com/dmjio/Hello-HaLVM">Web Server example</a></li>
+</ul>
+</section>
+<section id="result-1" class="slide level3">
+<h1>Result</h1>
+<pre><code>building path(s) /nix/store/&lt;long-nix-hash&gt;-hello-halvm
+Parsing config from /nix/store/&lt;long-nix-hash&gt;-xenConfig
+Assigned IP: (10,0,1,188)
+C-[
+$ curl 10.0.1.188
+&lt;!doctype html&gt;
+&lt;html&gt;
+  &lt;head&gt;&lt;/head&gt;
+  &lt;body&gt;HaLVM says Hello! You are request 0&lt;/body&gt;
+&lt;/html&gt;%</code></pre>
+</section>
+<section id="future-work" class="slide level3">
+<h1>Future work</h1>
+<p>HaLVM 3 - <a href="http://uhsure.com/halvm3.html">HaLVM3 Roadmap</a> - Backpack (ML Modules for Haskell), musl, Solo5 - Swap out different hypervisor targets with ease</p>
+<!-- Best resource for future plans are Adam's blog post,
+Musl is a small glibc replacement optimized for static linking -->
+</section>
+<section id="thanks" class="slide level3">
+<h1>Thanks!</h1>
+<p>HaLVM Lightning Talk</p>
+<p><a href="https://github.com/dmjio"><span class="citation" data-cites="dmjio">@dmjio</span></a></p>
+</section>
+			</div>
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.js"></script>
+
+		<script>
+			// More info https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				history: true,
+
+				// More info https://github.com/hakimel/reveal.js#dependencies
+				dependencies: [
+					{ src: 'plugin/markdown/marked.js' },
+					{ src: 'plugin/markdown/markdown.js' },
+					{ src: 'plugin/notes/notes.js', async: true },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
+				]
+			});
+		</script>
+	</body>
+</html>
