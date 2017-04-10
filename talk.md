@@ -153,10 +153,9 @@ $ curl 10.0.1.188
 ```
 
 ### Future work
-HaLVM 3
-- <a href="http://uhsure.com/halvm3.html">HaLVM3 Roadmap</a>
-- Backpack (ML Modules for Haskell), musl, Solo5
-  - Swap out different hypervisor targets with ease
+  - <a href="http://uhsure.com/halvm3.html">HaLVM3 Roadmap</a>
+      - Backpack (ML Modules for Haskell), musl, Solo5
+      - Swap out different hypervisor targets with ease
 
 <!-- Best resource for future plans are Adam's blog post,
 Musl is a small glibc replacement optimized for static linking -->
