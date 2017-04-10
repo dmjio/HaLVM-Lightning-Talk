@@ -3,5 +3,5 @@ all:
 clean:
 	rm index.html
 open: all # osx only sorry
-	open talk.html
+	open index.html
 .PHONY: clean all open tildes
